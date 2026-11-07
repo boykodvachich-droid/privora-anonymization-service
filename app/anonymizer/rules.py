@@ -1,4 +1,3 @@
-
 import re
 from datetime import datetime
 from dataclasses import dataclass
@@ -58,7 +57,6 @@ def mask_phone(value: str) -> str:
         i for i, ch in enumerate(value) if ch.isdigit()
     ]
 
-    # Long digit sequences are handled by the bank card rule.
     if len(digit_positions) >= 13:
         return value
 
@@ -131,7 +129,6 @@ def mask_inn(value: str) -> str:
 
 
 def mask_bank_card(value: str) -> str:
-    # Invalid card numbers must remain unchanged.
     if not is_valid_bank_card(value):
         return value
 
@@ -159,6 +156,7 @@ def mask_person(value: str) -> str:
         "доброе утро",
         "днём рождения",
         "днем рождения",
+        "проверка redis",
     }
 
     if value.casefold() in ignored_phrases:
@@ -287,7 +285,7 @@ DEFAULT_RULES = [
 
     Rule(
         "PHONE",
-        re.compile(r"(?<!\w)\+?\d[\d\s()\-]{7,}\d(?!\w)"),
+        re.compile(r"(?<!\w)\+?\d[\d\s()-]{7,}\d(?!\w)"),
         mask_phone,
         50,
     ),

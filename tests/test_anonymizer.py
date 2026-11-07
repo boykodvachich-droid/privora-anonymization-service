@@ -285,3 +285,13 @@ def test_masks_bank_card_without_spaces():
     assert result == "Card: ************1111"
     assert detected == {"BANK_CARD": 1}
 
+def test_does_not_detect_redis_check_as_person():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "Проверка Redis: ivan@example.com"
+    )
+
+    assert result == "Проверка Redis: i***@example.com"
+    assert detected == {"EMAIL": 1}
+
