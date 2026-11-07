@@ -11,6 +11,8 @@ from fastapi import FastAPI, HTTPException
 from app.schemas import AnonymizeRequest, AnonymizeResponse
 from app.anonymizer.engine import AnonymizationEngine
 from app.queue.rabbitmq import publish_task
+from app.database import SessionLocal
+from app.models import Task
 
 
 app = FastAPI(
@@ -100,16 +102,60 @@ def create_task(payload: AnonymizeRequest):
         "status": "pending",
     }
 
+    # Сохраняем задачу в PostgreSQL
+    db = SessionLocal()
+
+    try:
+        db_task = Task(
+            id=task_id,
+            status="pending",
+            original_text=payload.text,
+        )
+
+        db.add(db_task)
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save task to database",
+        ) from exc
+
+    finally:
+        db.close()
+
+    # Redis — необязательный кэш
     try:
         redis_client.setex(
             f"datamask:task:{task_id}",
             TASK_RESULT_TTL,
             json.dumps(task_data, ensure_ascii=False),
         )
+    except redis.RedisError:
+        pass
 
+    # Отправляем задачу в RabbitMQ независимо от Redis
+    try:
         publish_task(task_id, payload.text)
 
     except Exception as exc:
+        db = SessionLocal()
+
+        try:
+            failed_task = db.get(Task, task_id)
+
+            if failed_task:
+                failed_task.status = "failed"
+                db.commit()
+
+        except Exception:
+            db.rollback()
+
+        finally:
+            db.close()
+
         raise HTTPException(
             status_code=503,
             detail="Could not submit task for processing",
@@ -120,20 +166,29 @@ def create_task(payload: AnonymizeRequest):
 
 @app.get("/api/v1/tasks/{task_id}")
 def get_task(task_id: str):
+    # PostgreSQL — основной источник данных о задаче
+    db = SessionLocal()
+
     try:
-        task_data = redis_client.get(
-            f"datamask:task:{task_id}"
-        )
-    except redis.RedisError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Task storage is unavailable",
-        ) from exc
+        task = db.get(Task, task_id)
 
-    if not task_data:
-        raise HTTPException(
-            status_code=404,
-            detail="Task not found",
-        )
+        if task is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Task not found",
+            )
 
-    return json.loads(task_data)
+        return {
+            "task_id": task.id,
+            "status": task.status,
+            "anonymized_text": task.anonymized_text,
+            "detected": (
+                json.loads(task.detected)
+                if task.detected
+                else {}
+            ),
+            "processing_time_ms": task.processing_time_ms,
+        }
+
+    finally:
+        db.close()

@@ -12,14 +12,15 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://datamask:datamask@postgres:5432/datamask
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
-
+      DATABASE_URL: postgresql+psycopg://datamask:datamask@postgres:5432/datamask
   worker:
     build: .
     command: python -m app.queue.worker
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -27,6 +28,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      DATABASE_URL: postgresql+psycopg://datamask:datamask@postgres:5432/datamask
     restart: unless-stopped
 
   postgres:
