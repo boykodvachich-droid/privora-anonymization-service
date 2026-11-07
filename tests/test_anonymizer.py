@@ -231,3 +231,24 @@ def test_anonymizes_large_text():
     assert "+7 999 123-45-67" not in result
     assert detected["EMAIL"] == 100
     assert detected["PHONE"] == 100
+
+def test_masks_10_digit_inn():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "ИНН организации: 7707083893"
+    )
+
+    assert result == "ИНН организации: ********93"
+    assert detected == {"INN": 1}
+
+
+def test_masks_12_digit_inn():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "ИНН физлица: 500100732259"
+    )
+
+    assert result == "ИНН физлица: **********59"
+    assert detected == {"INN": 1}

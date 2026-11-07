@@ -1,3 +1,4 @@
+
 import re
 from datetime import datetime
 from dataclasses import dataclass
@@ -61,6 +62,45 @@ def mask_snils(value: str) -> str:
     return "".join(reversed(result))
 
 
+def mask_inn(value: str) -> str:
+    digits = [int(ch) for ch in value]
+
+    def checksum(numbers, weights):
+        total = sum(
+            digit * weight
+            for digit, weight in zip(numbers, weights)
+        )
+        return (total % 11) % 10
+
+    if len(digits) == 10:
+        expected = checksum(
+            digits[:9],
+            [2, 4, 10, 3, 5, 9, 4, 6, 8],
+        )
+
+        if expected != digits[9]:
+            return value
+
+    elif len(digits) == 12:
+        first_check = checksum(
+            digits[:10],
+            [7, 2, 4, 10, 3, 5, 9, 4, 6, 8],
+        )
+
+        second_check = checksum(
+            digits[:11],
+            [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8],
+        )
+
+        if first_check != digits[10] or second_check != digits[11]:
+            return value
+
+    else:
+        return value
+
+    return "*" * (len(value) - 2) + value[-2:]
+
+
 def mask_person(value: str) -> str:
     ignored_phrases = {
         "новым годом",
@@ -102,7 +142,6 @@ def mask_date(value: str) -> str:
         except ValueError:
             continue
 
-    # Invalid calendar date: leave unchanged.
     return value
 
 
@@ -111,6 +150,13 @@ def mask_date(value: str) -> str:
 # -------------------------
 
 DEFAULT_RULES = [
+    Rule(
+        "INN",
+        re.compile(r"(?<!\d)(?:\d{10}|\d{12})(?!\d)"),
+        mask_inn,
+        110,
+    ),
+
     Rule(
         "PASSPORT",
         re.compile(r"(?<!\d)\d{4}\s?\d{6}(?!\d)"),
