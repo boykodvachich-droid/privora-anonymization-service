@@ -14,6 +14,31 @@ class Rule:
 
 
 # -------------------------
+# VALIDATION FUNCTIONS
+# -------------------------
+
+def is_valid_bank_card(value: str) -> bool:
+    """Validate a bank card number using the Luhn algorithm."""
+    digits = [int(ch) for ch in value if ch.isdigit()]
+
+    if len(digits) not in range(13, 20):
+        return False
+
+    total = 0
+
+    for index, digit in enumerate(reversed(digits)):
+        if index % 2 == 1:
+            digit *= 2
+
+            if digit > 9:
+                digit -= 9
+
+        total += digit
+
+    return total % 10 == 0
+
+
+# -------------------------
 # MASKING FUNCTIONS
 # -------------------------
 
@@ -33,8 +58,12 @@ def mask_phone(value: str) -> str:
         i for i, ch in enumerate(value) if ch.isdigit()
     ]
 
+    # Long digit sequences are handled by the bank card rule.
+    if len(digit_positions) >= 13:
+        return value
+
     if len(digit_positions) < 4:
-        return "*" * len(value)
+        return value
 
     cutoff = set(digit_positions[:-2])
 
@@ -101,6 +130,29 @@ def mask_inn(value: str) -> str:
     return "*" * (len(value) - 2) + value[-2:]
 
 
+def mask_bank_card(value: str) -> str:
+    # Invalid card numbers must remain unchanged.
+    if not is_valid_bank_card(value):
+        return value
+
+    digits_seen = 0
+    total_digits = sum(ch.isdigit() for ch in value)
+    result = []
+
+    for ch in value:
+        if ch.isdigit():
+            digits_seen += 1
+
+            if digits_seen <= total_digits - 4:
+                result.append("*")
+            else:
+                result.append(ch)
+        else:
+            result.append(ch)
+
+    return "".join(result)
+
+
 def mask_person(value: str) -> str:
     ignored_phrases = {
         "новым годом",
@@ -150,6 +202,13 @@ def mask_date(value: str) -> str:
 # -------------------------
 
 DEFAULT_RULES = [
+    Rule(
+        "BANK_CARD",
+        re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)"),
+        mask_bank_card,
+        120,
+    ),
+
     Rule(
         "INN",
         re.compile(r"(?<!\d)(?:\d{10}|\d{12})(?!\d)"),

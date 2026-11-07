@@ -252,3 +252,36 @@ def test_masks_12_digit_inn():
 
     assert result == "ИНН физлица: **********59"
     assert detected == {"INN": 1}
+
+def test_masks_valid_bank_card():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "Номер карты: 4111 1111 1111 1111"
+    )
+
+    assert result == "Номер карты: **** **** **** 1111"
+    assert detected == {"BANK_CARD": 1}
+
+
+def test_does_not_mask_invalid_bank_card():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "Номер карты: 4111 1111 1111 1112"
+    )
+
+    assert result == "Номер карты: 4111 1111 1111 1112"
+    assert detected == {}
+
+
+def test_masks_bank_card_without_spaces():
+    engine = AnonymizationEngine()
+
+    result, detected = engine.anonymize(
+        "Card: 4111111111111111"
+    )
+
+    assert result == "Card: ************1111"
+    assert detected == {"BANK_CARD": 1}
+
