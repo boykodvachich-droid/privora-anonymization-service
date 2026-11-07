@@ -2,13 +2,15 @@
 import os
 import json
 import hashlib
+import uuid
 from time import perf_counter
 
 import redis
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.schemas import AnonymizeRequest, AnonymizeResponse
 from app.anonymizer.engine import AnonymizationEngine
+from app.queue.rabbitmq import publish_task
 
 
 app = FastAPI(
@@ -19,7 +21,6 @@ app = FastAPI(
 
 engine = AnonymizationEngine()
 
-# Redis connection
 redis_client = redis.Redis.from_url(
     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
     decode_responses=True,
@@ -27,7 +28,8 @@ redis_client = redis.Redis.from_url(
     socket_timeout=1,
 )
 
-CACHE_TTL = 300  # 5 minutes
+CACHE_TTL = 300
+TASK_RESULT_TTL = 3600
 
 
 @app.get("/health")
@@ -39,12 +41,10 @@ def health():
 def anonymize(payload: AnonymizeRequest):
     started = perf_counter()
 
-    # Create a hash instead of storing the original text in the cache key.
     cache_key = "datamask:" + hashlib.sha256(
         payload.text.encode("utf-8")
     ).hexdigest()
 
-    # Try to get the result from Redis.
     try:
         cached_result = redis_client.get(cache_key)
 
@@ -64,7 +64,6 @@ def anonymize(payload: AnonymizeRequest):
     except (redis.RedisError, ValueError):
         pass
 
-    # If cache is unavailable or empty, anonymize normally.
     result, detected = engine.anonymize(payload.text)
 
     elapsed_ms = round(
@@ -77,7 +76,6 @@ def anonymize(payload: AnonymizeRequest):
         processing_time_ms=elapsed_ms,
     )
 
-    # Try to save the result in Redis.
     try:
         redis_client.setex(
             cache_key,
@@ -87,8 +85,55 @@ def anonymize(payload: AnonymizeRequest):
                 "detected": detected,
             }, ensure_ascii=False),
         )
-
     except redis.RedisError:
         pass
 
     return response
+
+
+@app.post("/api/v1/tasks")
+def create_task(payload: AnonymizeRequest):
+    task_id = str(uuid.uuid4())
+
+    task_data = {
+        "task_id": task_id,
+        "status": "pending",
+    }
+
+    try:
+        redis_client.setex(
+            f"datamask:task:{task_id}",
+            TASK_RESULT_TTL,
+            json.dumps(task_data, ensure_ascii=False),
+        )
+
+        publish_task(task_id, payload.text)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not submit task for processing",
+        ) from exc
+
+    return task_data
+
+
+@app.get("/api/v1/tasks/{task_id}")
+def get_task(task_id: str):
+    try:
+        task_data = redis_client.get(
+            f"datamask:task:{task_id}"
+        )
+    except redis.RedisError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Task storage is unavailable",
+        ) from exc
+
+    if not task_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found",
+        )
+
+    return json.loads(task_data)
