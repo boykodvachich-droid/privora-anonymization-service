@@ -73,7 +73,7 @@ function App() {
   const [taskDateFilter, setTaskDateFilter] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<Category[]>(() => {
     try {
-      const saved = window.localStorage.getItem('datamask-enabled-categories')
+      const saved = window.localStorage.getItem('privora-enabled-categories') ?? window.localStorage.getItem('datamask-enabled-categories')
       if (!saved) return [...ALL_CATEGORIES]
 
       const parsed: unknown = JSON.parse(saved)
@@ -88,7 +88,7 @@ function App() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
-        'datamask-enabled-categories',
+        'privora-enabled-categories',
         JSON.stringify(selectedCategories)
       )
     } catch {
@@ -262,7 +262,7 @@ function App() {
 
   function exportResultTxt() {
     if (!result) return
-    downloadFile('datamask-anonymized-result.txt', result.anonymized_text, 'text/plain;charset=utf-8')
+    downloadFile('privora-anonymized-result.txt', result.anonymized_text, 'text/plain;charset=utf-8')
   }
 
   function exportResultJson() {
@@ -272,7 +272,7 @@ function App() {
       detected: result.detected,
       processing_time_ms: result.processing_time_ms,
     }
-    downloadFile('datamask-anonymized-result.json', JSON.stringify(exportData, null, 2), 'application/json;charset=utf-8')
+    downloadFile('privora-anonymized-result.json', JSON.stringify(exportData, null, 2), 'application/json;charset=utf-8')
   }
 
   function exportTasksCsv() {
@@ -295,7 +295,7 @@ function App() {
       .map(row => row.map(escapeCsv).join(','))
       .join('\r\n')
 
-    downloadFile('datamask-task-history.csv', csv, 'text/csv;charset=utf-8')
+    downloadFile('privora-task-history.csv', csv, 'text/csv;charset=utf-8')
   }
 
   function clearWorkspace() {
@@ -394,7 +394,7 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><ShieldCheck size={23} strokeWidth={2.3} /></div>
-          <div className="brand-name">data<span>mask</span><small>PRIVACY WORKSPACE</small></div>
+          <div className="brand-name">Privora<small>PRIVACY PLATFORM</small></div>
         </div>
 
         <div className="side-label">WORKSPACE</div>
@@ -440,8 +440,8 @@ function App() {
             <div className="security-status"><span /> Privacy protection active</div>
           </div>
           <div className="profile-row">
-            <div className="avatar">DM</div>
-            <div className="profile-copy"><strong>DataMask</strong><span>Personal workspace</span></div>
+            <div className="avatar">PR</div>
+            <div className="profile-copy"><strong>Privora</strong><span>Personal workspace</span></div>
             <Settings size={16} className="profile-settings" />
           </div>
         </div>
@@ -533,7 +533,7 @@ function App() {
                 </section>
               </>
             )}
-            <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Task details from API</span></footer>
+            <footer className="page-footer"><span>© 2026 Privora. Built for privacy.</span><span><span className="footer-dot" /> Task details from API</span></footer>
           </div>
         ) : activePage === 'history' ? (
           <div className="page-content">
@@ -625,7 +625,7 @@ function App() {
                 </div>
               )}
             </section>
-            <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Task history from PostgreSQL</span></footer>
+            <footer className="page-footer"><span>© 2026 Privora. Built for privacy.</span><span><span className="footer-dot" /> Task history from PostgreSQL</span></footer>
           </div>
         ) : activePage === 'settings' ? (
           <div className="page-content">
@@ -633,7 +633,7 @@ function App() {
               <div>
                 <div className="eyebrow"><Settings size={13} /> CONFIGURATION</div>
                 <h1>Settings <span>& Security.</span></h1>
-                <p className="welcome-subtitle">Manage your DataMask preferences and privacy information.</p>
+                <p className="welcome-subtitle">Manage your Privora preferences and privacy information.</p>
               </div>
               <div className="secure-badge"><ShieldCheck size={17} /><span>Secure workspace</span></div>
             </section>
@@ -642,7 +642,7 @@ function App() {
               <div className="section-heading">
                 <div><h2><Fingerprint size={18} /> Detection categories</h2><p>Choose which sensitive data categories you want to review.</p></div>
               </div>
-              <p className="welcome-subtitle">Enable the categories DataMask should detect and anonymize. Your choices are saved in this browser.</p>
+              <p className="welcome-subtitle">Enable the categories Privora should detect and anonymize. Your choices are saved in this browser.</p>
               <div className="history-heading">
                 <div><p>{selectedCategories.length} of {ALL_CATEGORIES.length} categories enabled</p></div>
                 <div className="task-actions">
@@ -693,7 +693,7 @@ function App() {
 
             <section className="history-card">
               <div className="section-heading">
-                <div><h2><LockKeyhole size={18} /> Data & Privacy</h2><p>How DataMask handles your task history and results.</p></div>
+                <div><h2><LockKeyhole size={18} /> Data & Privacy</h2><p>How Privora handles your task history and results.</p></div>
               </div>
               <div className="settings-list">
                 <div className="settings-row"><span>Task history</span><span>Stored in PostgreSQL</span></div>
@@ -702,7 +702,7 @@ function App() {
               </div>
             </section>
 
-            <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Settings</span></footer>
+            <footer className="page-footer"><span>© 2026 Privora. Built for privacy.</span><span><span className="footer-dot" /> Settings</span></footer>
           </div>
         ) : activePage === 'anonymization' ? (
           <div className="page-content">
@@ -719,7 +719,7 @@ function App() {
               <div className="section-heading">
                 <div>
                   <h2>Anonymize your data</h2>
-                  <p>Paste your text below and let DataMask handle the sensitive details.</p>
+                  <p>Paste your text below and let Privora handle the sensitive details.</p>
                 </div>
                 <div className="live-label"><span /> LIVE WORKSPACE</div>
               </div>
@@ -740,7 +740,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
                     maxLength={100000}
                   />
                   <div className="editor-footer">
-                    <span><LockKeyhole size={13} /> Your text is sent to your DataMask API</span>
+                    <span><LockKeyhole size={13} /> Your text is sent to your Privora API</span>
                     <span>{input.length.toLocaleString()} / 100,000</span>
                   </div>
                 </div>
@@ -767,7 +767,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
                         <div className="empty-icon"><ShieldCheck size={27} /></div>
                         <strong>Your protected text will appear here</strong>
                         <p>Run anonymization to see the secured result.</p>
-                        <div className="empty-lock"><LockKeyhole size={12} /> END-TO-END WORKFLOW</div>
+                        <div className="empty-lock"><LockKeyhole size={12} /> PRIVACY-FIRST WORKFLOW</div>
                       </div>
                     )}
                   </div>
@@ -830,7 +830,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
               </div>
             </section>
 
-            <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Anonymization workspace</span></footer>
+            <footer className="page-footer"><span>© 2026 Privora. Built for privacy.</span><span><span className="footer-dot" /> Anonymization workspace</span></footer>
           </div>
         ) : (
         <div className="page-content">
@@ -890,7 +890,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
 
           <section className="workspace-section">
             <div className="section-heading">
-              <div><h2>Anonymize your data</h2><p>Paste your text below and let DataMask handle the sensitive details.</p></div>
+              <div><h2>Anonymize your data</h2><p>Paste your text below and let Privora handle the sensitive details.</p></div>
               <div className="live-label"><span /> LIVE WORKSPACE</div>
             </div>
 
@@ -910,7 +910,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
                   maxLength={100000}
                 />
                 <div className="editor-footer">
-                  <span><LockKeyhole size={13} /> Your text is sent to your DataMask API</span>
+                  <span><LockKeyhole size={13} /> Your text is sent to your Privora API</span>
                   <span>{input.length.toLocaleString()} / 100,000</span>
                 </div>
               </div>
@@ -930,7 +930,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
                   )}
                 </div>
                 <div className={`result-area ${result ? 'has-result' : ''}`}>
-                  {result ? <pre>{result.anonymized_text}</pre> : <div className="empty-result"><div className="empty-icon"><ShieldCheck size={27} /></div><strong>Your protected text will appear here</strong><p>Run anonymization to see the secured result.</p><div className="empty-lock"><LockKeyhole size={12} /> END-TO-END WORKFLOW</div></div>}
+                  {result ? <pre>{result.anonymized_text}</pre> : <div className="empty-result"><div className="empty-icon"><ShieldCheck size={27} /></div><strong>Your protected text will appear here</strong><p>Run anonymization to see the secured result.</p><div className="empty-lock"><LockKeyhole size={12} /> PRIVACY-FIRST WORKFLOW</div></div>}
                 </div>
                 <div className="editor-footer">
                   <span><ShieldCheck size={13} /> Sensitive data masked</span>
@@ -944,7 +944,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
             {backgroundStatus && <div className="background-status"><Activity size={14} /> {backgroundStatus}</div>}
 
             <div className="action-row">
-              <div className="helper-text"><Sparkles size={15} /> AI-powered pattern detection <span className="helper-separator">·</span> Instant processing</div>
+              <div className="helper-text"><Sparkles size={15} /> Rule-based sensitive data detection <span className="helper-separator">·</span> Instant processing</div>
               <div className="action-buttons">
                 <button className="anonymize-button" onClick={anonymize} disabled={!input.trim() || loading || backgroundLoading}>
                   {loading ? <span className="spinner" /> : <><ShieldCheck size={17} /> Anonymize text <ArrowRight size={16} /></>}
@@ -977,7 +977,7 @@ My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
             </div>
           </section>
 
-          <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> All systems operational</span></footer>
+          <footer className="page-footer"><span>© 2026 Privora. Built for privacy.</span><span><span className="footer-dot" /> All systems operational</span></footer>
         </div>)}
       </main>
     </div>
