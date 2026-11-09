@@ -41,8 +41,26 @@ def process_task(channel, method, properties, body):
         message = json.loads(body.decode("utf-8"))
 
         task_id = message["task_id"]
-        text = message["text"]
         categories = message.get("categories")
+
+        # Получаем задачу и исходный текст из PostgreSQL
+        db_task = db.get(Task, task_id)
+
+        if db_task is None:
+            raise ValueError("Task not found in database")
+
+        # Повторно доставленное завершённое задание не обрабатываем
+        if db_task.status == "completed":
+            channel.basic_ack(
+                delivery_tag=method.delivery_tag,
+            )
+            logger.info("Task %s was already completed", task_id)
+            return
+
+        text = db_task.original_text
+
+        if not text:
+            raise ValueError("Original text is empty")
 
         # Выполняем анонимизацию
         anonymized_text, detected = engine.anonymize(
@@ -54,12 +72,6 @@ def process_task(channel, method, properties, body):
             (perf_counter() - started) * 1000,
             3,
         )
-
-        # Находим задачу в PostgreSQL
-        db_task = db.get(Task, task_id)
-
-        if db_task is None:
-            raise ValueError("Task not found in database")
 
         # Сохраняем результат и очищаем исходный текст
         db_task.status = "completed"
@@ -136,6 +148,7 @@ def process_task(channel, method, properties, body):
 
     finally:
         db.close()
+
 
 def main():
     """Start the RabbitMQ worker."""

@@ -1,4 +1,3 @@
-
 import json
 import os
 import time
@@ -15,6 +14,7 @@ RABBITMQ_URL = os.getenv(
 )
 
 QUEUE_NAME = "datamask_anonymization"
+DLQ_NAME = "datamask_anonymization_dead"
 
 
 def get_connection(max_retries: int = 5, delay: int = 2):
@@ -41,26 +41,36 @@ def get_connection(max_retries: int = 5, delay: int = 2):
             time.sleep(delay)
 
 
+def declare_queues(channel):
+    """Declare durable task and dead-letter queues."""
+
+    channel.queue_declare(
+        queue=DLQ_NAME,
+        durable=True,
+    )
+
+    channel.queue_declare(
+        queue=QUEUE_NAME,
+        durable=True,
+    )
+
+
 def publish_task(
     task_id: str,
-    text: str,
     categories: list[str] | None = None,
 ) -> None:
-    """Publish an anonymization task to RabbitMQ."""
+    """Publish a task ID and categories without original text."""
 
     connection = get_connection()
 
     try:
         channel = connection.channel()
 
-        channel.queue_declare(
-            queue=QUEUE_NAME,
-            durable=True,
-        )
+        declare_queues(channel)
+        channel.confirm_delivery()
 
         message = {
             "task_id": task_id,
-            "text": text,
             "categories": categories,
         }
 
@@ -72,6 +82,7 @@ def publish_task(
                 delivery_mode=2,
                 content_type="application/json",
             ),
+            mandatory=True,
         )
 
         logger.info("Published task %s to RabbitMQ", task_id)

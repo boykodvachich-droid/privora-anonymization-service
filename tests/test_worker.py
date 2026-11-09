@@ -41,7 +41,7 @@ def test_worker_processes_task(db_session, monkeypatch):
 
     body = json.dumps({
         "task_id": task_id,
-        "text": "Contact ivan@example.com",
+        "categories": None,
     }).encode("utf-8")
 
     worker.process_task(channel, method, None, body)
@@ -52,6 +52,7 @@ def test_worker_processes_task(db_session, monkeypatch):
     assert saved_task.status == "completed"
     assert saved_task.anonymized_text == "Contact i***@example.com"
     assert saved_task.detected == '{"EMAIL": 1}'
+    assert saved_task.original_text == ""
     assert channel.acked == 123
 
 
@@ -74,7 +75,7 @@ def test_worker_marks_missing_task_as_failed(db_session, monkeypatch):
 
     body = json.dumps({
         "task_id": "22222222-2222-2222-2222-222222222222",
-        "text": "Contact ivan@example.com",
+        "categories": None,
     }).encode("utf-8")
 
     worker.process_task(channel, method, None, body)

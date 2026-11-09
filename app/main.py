@@ -156,7 +156,7 @@ def create_task(payload: AnonymizeRequest):
 
     # Отправляем задачу в RabbitMQ независимо от Redis
     try:
-        publish_task(task_id, payload.text)
+        publish_task(task_id, payload.categories)
 
     except Exception as exc:
         db = SessionLocal()

@@ -8,3 +8,6 @@ __pycache__/
 large_test.json
 # macOS
 .DS_Store
+
+# Local backups
+backups/
