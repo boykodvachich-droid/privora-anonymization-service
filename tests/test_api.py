@@ -73,3 +73,30 @@ def test_anonymize_rejects_empty_text(client):
     )
 
     assert response.status_code == 422
+
+def test_create_task_clears_original_text_when_publish_fails(
+    client, db_session, monkeypatch
+):
+    from app import main
+
+    created_task_ids = []
+
+    def fail_publish(task_id, text):
+        created_task_ids.append(task_id)
+        raise RuntimeError("RabbitMQ unavailable")
+
+    monkeypatch.setattr(main, "publish_task", fail_publish)
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={"text": "Sensitive information test@example.com"},
+    )
+
+    assert response.status_code == 503
+    assert len(created_task_ids) == 1
+
+    failed_task = db_session.get(main.Task, created_task_ids[0])
+
+    assert failed_task is not None
+    assert failed_task.status == "failed"
+    assert failed_task.original_text == ""

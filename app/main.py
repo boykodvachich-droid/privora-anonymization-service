@@ -166,6 +166,7 @@ def create_task(payload: AnonymizeRequest):
 
             if failed_task:
                 failed_task.status = "failed"
+                failed_task.original_text = ""
                 db.commit()
 
         except Exception:
