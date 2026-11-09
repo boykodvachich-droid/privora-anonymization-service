@@ -112,6 +112,7 @@ function App() {
     const matchesDate = !taskDateFilter || localDate === taskDateFilter
     return matchesSearch && matchesStatus && matchesDate
   })
+
   const [backgroundLoading, setBackgroundLoading] = useState(false)
   const [backgroundStatus, setBackgroundStatus] = useState('')
   const [selectedTask, setSelectedTask] = useState<{
@@ -398,9 +399,32 @@ function App() {
 
         <div className="side-label">WORKSPACE</div>
         <nav className="side-nav">
-          <div className={`nav-item ${activePage === "overview" ? "active" : ""}`} onClick={() => setActivePage("overview")}><LayoutDashboard size={18} /> <span>Overview</span></div>
-          <div className="nav-item"><FileText size={18} /> <span>Anonymization</span><span className="nav-dot" /></div>
-          <div className={`nav-item ${activePage === "history" ? "active" : ""}`} onClick={() => { setActivePage("history"); loadTasks() }}><Clock3 size={18} /> <span>Task history</span></div>
+          <div
+            className={`nav-item ${activePage === 'overview' ? 'active' : ''}`}
+            onClick={() => setActivePage('overview')}
+          >
+            <LayoutDashboard size={18} />
+            <span>Overview</span>
+          </div>
+
+          <div
+            className={`nav-item ${activePage === 'anonymization' ? 'active' : ''}`}
+            onClick={() => setActivePage('anonymization')}
+          >
+            <FileText size={18} />
+            <span>Anonymization</span>
+          </div>
+
+          <div
+            className={`nav-item ${activePage === 'history' ? 'active' : ''}`}
+            onClick={() => {
+              setActivePage('history')
+              loadTasks()
+            }}
+          >
+            <Clock3 size={18} />
+            <span>Task history</span>
+          </div>
         </nav>
 
         <div className="side-label tools-label">PREFERENCES</div>
@@ -425,7 +449,21 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>{activePage === "history" ? "Task history" : activePage === "task-detail" ? "Task details" : activePage === "settings" ? "Settings" : "Overview"}</strong></div>
+          <div className="breadcrumbs">
+            <span>Workspace</span>
+            <span className="crumb-slash">/</span>
+            <strong>
+              {activePage === 'history'
+                ? 'Task history'
+                : activePage === 'task-detail'
+                  ? 'Task details'
+                  : activePage === 'settings'
+                    ? 'Settings'
+                    : activePage === 'anonymization'
+                      ? 'Anonymization'
+                      : 'Overview'}
+            </strong>
+          </div>
           <div className="topbar-right">
             <button className="api-pill" onClick={checkApi}>
               <span className={`status-dot ${apiOnline === false ? 'offline' : ''}`} />
@@ -665,6 +703,134 @@ function App() {
             </section>
 
             <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Settings</span></footer>
+          </div>
+        ) : activePage === 'anonymization' ? (
+          <div className="page-content">
+            <section className="welcome-row">
+              <div>
+                <div className="eyebrow"><FileText size={13} /> DATA PROTECTION</div>
+                <h1>Anonymization <span>workspace.</span></h1>
+                <p className="welcome-subtitle">Detect and anonymize sensitive information in your text.</p>
+              </div>
+              <div className="secure-badge"><ShieldCheck size={17} /><span>Secure workspace</span></div>
+            </section>
+
+            <section className="workspace-section">
+              <div className="section-heading">
+                <div>
+                  <h2>Anonymize your data</h2>
+                  <p>Paste your text below and let DataMask handle the sensitive details.</p>
+                </div>
+                <div className="live-label"><span /> LIVE WORKSPACE</div>
+              </div>
+
+              <div className="editor-grid">
+                <div className="editor-card">
+                  <div className="editor-header">
+                    <div className="editor-title"><span className="editor-number">01</span><div><strong>Original text</strong><small>INPUT SOURCE</small></div></div>
+                    <button className="subtle-button" onClick={clearWorkspace}><Trash2 size={14} /> Clear</button>
+                  </div>
+                  <textarea
+                    value={input}
+                    onChange={event => setInput(event.target.value)}
+                    placeholder="Paste or type text containing personal information...
+
+For example:
+My name is Ivan Petrov. Contact me at ivan@example.com or +7 999 123-45-67."
+                    maxLength={100000}
+                  />
+                  <div className="editor-footer">
+                    <span><LockKeyhole size={13} /> Your text is sent to your DataMask API</span>
+                    <span>{input.length.toLocaleString()} / 100,000</span>
+                  </div>
+                </div>
+
+                <div className="editor-card result-card">
+                  <div className="editor-header">
+                    <div className="editor-title"><span className="editor-number result-number">02</span><div><strong>Protected output</strong><small>ANONYMIZED RESULT</small></div></div>
+                    {result && (
+                      <div className="export-actions">
+                        <button className="subtle-button copy-button" onClick={copyResult}>
+                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {copied ? 'Copied' : 'Copy'}
+                        </button>
+                        <button className="subtle-button" onClick={exportResultTxt}>Download TXT</button>
+                        <button className="subtle-button" onClick={exportResultJson}>Download JSON</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className={`result-area ${result ? 'has-result' : ''}`}>
+                    {result ? (
+                      <pre>{result.anonymized_text}</pre>
+                    ) : (
+                      <div className="empty-result">
+                        <div className="empty-icon"><ShieldCheck size={27} /></div>
+                        <strong>Your protected text will appear here</strong>
+                        <p>Run anonymization to see the secured result.</p>
+                        <div className="empty-lock"><LockKeyhole size={12} /> END-TO-END WORKFLOW</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="editor-footer">
+                    <span><ShieldCheck size={13} /> Sensitive data masked</span>
+                    <span>{result ? `${result.anonymized_text.length.toLocaleString()} characters` : 'Awaiting input'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {error && <div className="error-banner">{error}</div>}
+              {backgroundStatus && <div className="background-status"><Activity size={14} /> {backgroundStatus}</div>}
+
+              <div className="action-row">
+                <div className="helper-text"><Sparkles size={15} /> Pattern-based data detection <span className="helper-separator">·</span> Instant processing</div>
+                <div className="action-buttons">
+                  <button className="anonymize-button" onClick={anonymize} disabled={!input.trim() || loading || backgroundLoading}>
+                    {loading ? <span className="spinner" /> : <><ShieldCheck size={17} /> Anonymize text <ArrowRight size={16} /></>}
+                    {loading && 'Processing...'}
+                  </button>
+                  <button className="subtle-button background-button" onClick={anonymizeInBackground} disabled={!input.trim() || loading || backgroundLoading}>
+                    {backgroundLoading ? <span className="spinner" /> : <Clock3 size={15} />}
+                    {backgroundLoading ? 'In queue...' : 'Run in background'}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="bottom-grid">
+              <div className="bottom-card detection-card">
+                <div className="bottom-heading">
+                  <div><h3>Detection summary</h3><p>Personal data identified in your text</p></div>
+                  <span className="summary-count">{result ? detectedTotal : 0} found</span>
+                </div>
+                {result && detectedTotal > 0 ? (
+                  <div className="category-list">
+                    {Object.entries(result.detected).map(([name, count]) => {
+                      const Icon = categoryIcons[name] || FileSearch
+                      return (
+                        <div className="category-item" key={name}>
+                          <span className="category-icon"><Icon size={15} /></span>
+                          <span className="category-name">{name.replace('_', ' ')}</span>
+                          <strong>{count}</strong>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="summary-empty"><FileSearch size={19} /><span>Run an analysis to see detected categories.</span></div>
+                )}
+              </div>
+
+              <div className="bottom-card tips-card">
+                <div className="tips-icon"><LockKeyhole size={18} /></div>
+                <div>
+                  <h3>Privacy by design</h3>
+                  <p>Choose enabled detection categories in Settings. Your selected categories are applied to both instant and background processing.</p>
+                  <button className="tips-link" onClick={() => setActivePage('settings')}>Configure detection categories <ArrowRight size={13} /></button>
+                </div>
+              </div>
+            </section>
+
+            <footer className="page-footer"><span>© 2026 DataMask. Built for privacy.</span><span><span className="footer-dot" /> Anonymization workspace</span></footer>
           </div>
         ) : (
         <div className="page-content">

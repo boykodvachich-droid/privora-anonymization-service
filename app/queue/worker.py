@@ -59,9 +59,9 @@ def process_task(channel, method, properties, body):
         db_task = db.get(Task, task_id)
 
         if db_task is None:
-            raise ValueError(f"Task {task_id} not found in database")
+            raise ValueError("Task not found in database")
 
-        # Сохраняем результат в PostgreSQL
+        # Сохраняем результат и очищаем исходный текст
         db_task.status = "completed"
         db_task.anonymized_text = anonymized_text
         db_task.detected = json.dumps(
@@ -69,6 +69,7 @@ def process_task(channel, method, properties, body):
             ensure_ascii=False,
         )
         db_task.processing_time_ms = processing_time_ms
+        db_task.original_text = ""
 
         db.commit()
 
@@ -81,7 +82,7 @@ def process_task(channel, method, properties, body):
             "processing_time_ms": processing_time_ms,
         }
 
-        # Обновляем Redis (PostgreSQL остаётся основным хранилищем)
+        # Обновляем Redis
         try:
             redis_client.setex(
                 f"datamask:task:{task_id}",
@@ -89,7 +90,7 @@ def process_task(channel, method, properties, body):
                 json.dumps(result, ensure_ascii=False),
             )
         except redis.RedisError:
-            logger.exception(
+            logger.warning(
                 "Could not update Redis for task %s",
                 task_id,
             )
@@ -100,25 +101,32 @@ def process_task(channel, method, properties, body):
 
         logger.info("Task %s completed", task_id)
 
-    except Exception:
+    except Exception as exc:
         db.rollback()
 
-        logger.exception("Task %s failed", task_id)
+        logger.error(
+            "Task %s failed (%s)",
+            task_id,
+            type(exc).__name__,
+        )
 
-        # Пытаемся сохранить статус ошибки в PostgreSQL
+        # Сохраняем статус ошибки и очищаем исходный текст
         try:
             if task_id != "unknown":
                 failed_task = db.get(Task, task_id)
 
                 if failed_task is not None:
                     failed_task.status = "failed"
+                    failed_task.original_text = ""
                     db.commit()
 
-        except Exception:
+        except Exception as db_exc:
             db.rollback()
-            logger.exception(
-                "Could not update failed status for task %s",
+
+            logger.error(
+                "Could not update failed task %s (%s)",
                 task_id,
+                type(db_exc).__name__,
             )
 
         channel.basic_nack(
@@ -128,7 +136,6 @@ def process_task(channel, method, properties, body):
 
     finally:
         db.close()
-
 
 def main():
     """Start the RabbitMQ worker."""

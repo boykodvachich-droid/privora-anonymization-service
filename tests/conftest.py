@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus, urlsplit, urlunsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,17 +10,36 @@ from app.database import Base
 from app import main
 
 
-TEST_DATABASE_URL = (
-    "postgresql+psycopg://datamask:datamask@postgres:5432/datamask_test"
-)
+def get_test_database_url():
+    database_url = os.environ.get("DATABASE_URL")
 
-# Для запуска тестов внутри Docker используем имя postgres.
-# Для локального запуска на Mac — localhost.
-if not os.path.exists("/.dockerenv"):
-    TEST_DATABASE_URL = (
-        "postgresql+psycopg://datamask:datamask@localhost:5432/datamask_test"
-    )
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not configured")
 
+    parsed = urlsplit(database_url)
+
+    password = os.environ.get("POSTGRES_PASSWORD")
+    if not password:
+        raise RuntimeError("POSTGRES_PASSWORD is not configured")
+
+    host = parsed.hostname
+    port = parsed.port or 5432
+
+    if not os.path.exists("/.dockerenv"):
+        host = "localhost"
+
+    netloc = f"datamask:{quote_plus(password)}@{host}:{port}"
+
+    return urlunsplit((
+        parsed.scheme,
+        netloc,
+        "/datamask_test",
+        "",
+        "",
+    ))
+
+
+TEST_DATABASE_URL = get_test_database_url()
 
 test_engine = create_engine(
     TEST_DATABASE_URL,
@@ -41,6 +61,7 @@ def setup_test_database():
     yield
 
     Base.metadata.drop_all(bind=test_engine)
+    test_engine.dispose()
 
 
 @pytest.fixture
