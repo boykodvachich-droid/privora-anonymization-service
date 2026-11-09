@@ -41,7 +41,11 @@ def get_connection(max_retries: int = 5, delay: int = 2):
             time.sleep(delay)
 
 
-def publish_task(task_id: str, text: str) -> None:
+def publish_task(
+    task_id: str,
+    text: str,
+    categories: list[str] | None = None,
+) -> None:
     """Publish an anonymization task to RabbitMQ."""
 
     connection = get_connection()
@@ -57,6 +61,7 @@ def publish_task(task_id: str, text: str) -> None:
         message = {
             "task_id": task_id,
             "text": text,
+            "categories": categories,
         }
 
         channel.basic_publish(
@@ -69,7 +74,7 @@ def publish_task(task_id: str, text: str) -> None:
             ),
         )
 
-        logger.info("Task %s published", task_id)
+        logger.info("Published task %s to RabbitMQ", task_id)
 
     finally:
         connection.close()

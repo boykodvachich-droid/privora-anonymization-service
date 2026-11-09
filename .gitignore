@@ -6,3 +6,5 @@ __pycache__/
 .idea/
 .vscode/
 large_test.json
+# macOS
+.DS_Store

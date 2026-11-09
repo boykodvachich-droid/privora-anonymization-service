@@ -6,7 +6,7 @@ import uuid
 from time import perf_counter
 
 import redis
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 from app.schemas import AnonymizeRequest, AnonymizeResponse
 from app.anonymizer.engine import AnonymizationEngine
@@ -43,8 +43,23 @@ def health():
 def anonymize(payload: AnonymizeRequest):
     started = perf_counter()
 
+    categories_key = (
+        sorted(payload.categories)
+        if payload.categories is not None
+        else None
+    )
+
+    cache_data = json.dumps(
+        {
+            "text": payload.text,
+            "categories": categories_key,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
     cache_key = "datamask:" + hashlib.sha256(
-        payload.text.encode("utf-8")
+        cache_data.encode("utf-8")
     ).hexdigest()
 
     try:
@@ -66,7 +81,10 @@ def anonymize(payload: AnonymizeRequest):
     except (redis.RedisError, ValueError):
         pass
 
-    result, detected = engine.anonymize(payload.text)
+    result, detected = engine.anonymize(
+        payload.text,
+        categories=payload.categories,
+    )
 
     elapsed_ms = round(
         (perf_counter() - started) * 1000, 3
@@ -164,6 +182,41 @@ def create_task(payload: AnonymizeRequest):
     return task_data
 
 
+@app.get("/api/v1/tasks")
+def list_tasks(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Return recent tasks without exposing original text."""
+    db = SessionLocal()
+
+    try:
+        tasks = (
+            db.query(Task)
+            .order_by(Task.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "items": [
+                {
+                    "task_id": task.id,
+                    "status": task.status,
+                    "created_at": task.created_at,
+                    "processing_time_ms": task.processing_time_ms,
+                }
+                for task in tasks
+            ],
+            "limit": limit,
+            "offset": offset,
+        }
+
+    finally:
+        db.close()
+
+
 @app.get("/api/v1/tasks/{task_id}")
 def get_task(task_id: str):
     # PostgreSQL — основной источник данных о задаче
@@ -181,6 +234,7 @@ def get_task(task_id: str):
         return {
             "task_id": task.id,
             "status": task.status,
+            "created_at": task.created_at,
             "anonymized_text": task.anonymized_text,
             "detected": (
                 json.loads(task.detected)
@@ -188,6 +242,38 @@ def get_task(task_id: str):
                 else {}
             ),
             "processing_time_ms": task.processing_time_ms,
+        }
+
+    finally:
+        db.close()
+
+
+@app.delete("/api/v1/tasks/{task_id}")
+def delete_task(task_id: str):
+    """Delete a completed or failed task."""
+    db = SessionLocal()
+
+    try:
+        task = db.get(Task, task_id)
+
+        if task is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Task not found",
+            )
+
+        if task.status not in ("completed", "failed"):
+            raise HTTPException(
+                status_code=409,
+                detail="Only completed or failed tasks can be deleted",
+            )
+
+        db.delete(task)
+        db.commit()
+
+        return {
+            "task_id": task_id,
+            "status": "deleted",
         }
 
     finally:

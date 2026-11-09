@@ -42,9 +42,13 @@ def process_task(channel, method, properties, body):
 
         task_id = message["task_id"]
         text = message["text"]
+        categories = message.get("categories")
 
         # Выполняем анонимизацию
-        anonymized_text, detected = engine.anonymize(text)
+        anonymized_text, detected = engine.anonymize(
+            text,
+            categories=categories,
+        )
 
         processing_time_ms = round(
             (perf_counter() - started) * 1000,
