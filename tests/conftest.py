@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app import main
+from app import database, main
 
 
 def get_test_database_url():
@@ -90,6 +90,12 @@ def client(monkeypatch, db_session):
     )
 
     monkeypatch.setattr(
+        database,
+        "SessionLocal",
+        override_session_local,
+    )
+
+    monkeypatch.setattr(
         main,
         "publish_task",
         lambda task_id, text: None,
@@ -97,3 +103,26 @@ def client(monkeypatch, db_session):
 
     with TestClient(main.app) as test_client:
         yield test_client
+
+@pytest.fixture
+def auth_headers(client):
+    credentials = {
+        "email": "owner@example.com",
+        "password": "Strong-test-password-123!",
+    }
+
+    register_response = client.post(
+        "/api/v1/auth/register",
+        json=credentials,
+    )
+    assert register_response.status_code == 201, register_response.text
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json=credentials,
+    )
+    assert login_response.status_code == 200, login_response.text
+
+    return {
+        "Authorization": f"Bearer {login_response.json()['access_token']}"
+    }

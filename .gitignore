@@ -11,3 +11,4 @@ large_test.json
 
 # Local backups
 backups/
+secrets/

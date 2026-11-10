@@ -17,6 +17,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 COPY --chown=app:app app ./app
 COPY --chown=app:app tests ./tests
+COPY --chown=app:app alembic.ini ./alembic.ini
+COPY --chown=app:app migrations ./migrations
 
 USER app
 

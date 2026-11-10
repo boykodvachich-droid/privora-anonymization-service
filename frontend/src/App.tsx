@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   ShieldCheck, LayoutDashboard, FileText, Clock3, Settings,
-  LockKeyhole, Sparkles, ArrowRight, Copy, Check, Trash2,
+  LockKeyhole, Sparkles, ArrowRight, Copy, Check, Trash2, LogOut,
   Zap, Activity, Mail, Phone, CreditCard, UserRound,
   Fingerprint, MapPin, CalendarDays, FileSearch
 } from 'lucide-react'
@@ -11,6 +11,12 @@ type TaskItem = {
   status: string
   created_at: string
   processing_time_ms: number | null
+}
+
+type AuthUser = {
+  id: string
+  email: string
+  created_at: string
 }
 
 type ApiResult = {
@@ -64,6 +70,17 @@ function App() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    try { return window.sessionStorage.getItem('privora-access-token') }
+    catch { return null }
+  })
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
   const [activePage, setActivePage] = useState('overview')
   const [tasks, setTasks] = useState<TaskItem[]>([])
   const [tasksLoading, setTasksLoading] = useState(false)
@@ -95,6 +112,103 @@ function App() {
       // Keep the current selection even if browser storage is unavailable.
     }
   }, [selectedCategories])
+
+  useEffect(() => {
+    let active = true
+    const token = accessToken
+    if (!token) {
+      setAuthChecking(false)
+      return () => { active = false }
+    }
+    fetch('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(async response => {
+        if (!response.ok) throw new Error('Session expired')
+        return await response.json() as AuthUser
+      })
+      .then(user => { if (active) setCurrentUser(user) })
+      .catch(() => {
+        try { window.sessionStorage.removeItem('privora-access-token') } catch {}
+        if (active) { setAccessToken(null); setCurrentUser(null) }
+      })
+      .finally(() => { if (active) setAuthChecking(false) })
+    return () => { active = false }
+  }, [])
+
+  async function apiFetch(url: string, options: RequestInit = {}) {
+    const headers = new Headers(options.headers)
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+    const response = await fetch(url, { ...options, headers })
+    if (response.status === 401) {
+      try { window.sessionStorage.removeItem('privora-access-token') } catch {}
+      setAccessToken(null)
+      setCurrentUser(null)
+      setTasks([])
+      setSelectedTask(null)
+      setActivePage('overview')
+      setAuthError('Your session has expired. Please sign in again.')
+    }
+    return response
+  }
+
+  async function submitAuth() {
+    if (authLoading) return
+    setAuthLoading(true)
+    setAuthError('')
+    try {
+      if (authMode === 'register') {
+        const registration = await fetch('/api/v1/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authEmail.trim(), password: authPassword })
+        })
+        if (!registration.ok) {
+          const body = await registration.json().catch(() => ({}))
+          throw new Error(body.detail || `Registration failed (${registration.status})`)
+        }
+      }
+      const login = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail.trim(), password: authPassword })
+      })
+      if (!login.ok) {
+        const body = await login.json().catch(() => ({}))
+        throw new Error(body.detail || `Sign in failed (${login.status})`)
+      }
+      const tokenData: { access_token: string } = await login.json()
+      const profile = await fetch('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      })
+      if (!profile.ok) throw new Error('Could not load your account profile.')
+      const user: AuthUser = await profile.json()
+      window.sessionStorage.setItem('privora-access-token', tokenData.access_token)
+      setAccessToken(tokenData.access_token)
+      setCurrentUser(user)
+      setAuthPassword('')
+      setAuthError('')
+      setActivePage('overview')
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Authentication failed.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  function logout() {
+    try { window.sessionStorage.removeItem('privora-access-token') } catch {}
+    setAccessToken(null)
+    setCurrentUser(null)
+    setTasks([])
+    setSelectedTask(null)
+    setResult(null)
+    setInput('')
+    setActivePage('overview')
+    setAuthEmail('')
+    setAuthPassword('')
+    setAuthError('')
+  }
 
   function toggleCategory(category: Category) {
     setSelectedCategories(current =>
@@ -178,7 +292,7 @@ function App() {
     setResult(null)
 
     try {
-      const createResponse = await fetch('/api/v1/tasks', {
+      const createResponse = await apiFetch('/api/v1/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: input, categories: selectedCategories })
@@ -195,7 +309,7 @@ function App() {
       for (let attempt = 0; attempt < 150; attempt++) {
         await new Promise(resolve => window.setTimeout(resolve, 2000))
 
-        const statusResponse = await fetch(`/api/v1/tasks/${created.task_id}`)
+        const statusResponse = await apiFetch(`/api/v1/tasks/${created.task_id}`)
         if (!statusResponse.ok) {
           throw new Error(`Could not check task status (${statusResponse.status})`)
         }
@@ -309,7 +423,7 @@ function App() {
     setTasksLoading(true)
     setTasksError('')
     try {
-      const response = await fetch('/api/v1/tasks?limit=50&offset=0')
+      const response = await apiFetch('/api/v1/tasks?limit=50&offset=0')
       if (!response.ok) throw new Error(`Request failed (${response.status})`)
       const data: { items: TaskItem[] } = await response.json()
       setTasks(data.items)
@@ -328,7 +442,7 @@ function App() {
     setActivePage('task-detail')
 
     try {
-      const response = await fetch(`/api/v1/tasks/${taskId}`)
+      const response = await apiFetch(`/api/v1/tasks/${taskId}`)
       if (!response.ok) throw new Error(`Could not load task (${response.status})`)
       const data = await response.json()
       setSelectedTask(data)
@@ -361,7 +475,7 @@ function App() {
     setSelectedTaskError('')
 
     try {
-      const response = await fetch(`/api/v1/tasks/${selectedTask.task_id}`, {
+      const response = await apiFetch(`/api/v1/tasks/${selectedTask.task_id}`, {
         method: 'DELETE'
       })
 
@@ -387,6 +501,43 @@ function App() {
     } catch {
       setApiOnline(false)
     }
+  }
+
+  if (authChecking) {
+    return <div className="auth-shell"><div className="auth-loading"><ShieldCheck size={25} /> <span>Restoring your secure session...</span></div></div>
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <div className="auth-brand-mark"><ShieldCheck size={27} /></div>
+            <div><strong>Privora</strong><span>PRIVACY PLATFORM</span></div>
+          </div>
+          <div className="auth-eyebrow"><LockKeyhole size={13} /> YOUR PRIVATE WORKSPACE</div>
+          <h1>{authMode === 'login' ? 'Welcome back.' : 'Create your account.'}</h1>
+          <p className="auth-description">{authMode === 'login' ? 'Sign in to access your secure anonymization workspace.' : 'Create a secure account to keep your task history private.'}</p>
+          <div className="auth-tabs">
+            <button type="button" className={authMode === 'login' ? 'selected' : ''} onClick={() => { setAuthMode('login'); setAuthError('') }}>Sign in</button>
+            <button type="button" className={authMode === 'register' ? 'selected' : ''} onClick={() => { setAuthMode('register'); setAuthError('') }}>Create account</button>
+          </div>
+          <form className="auth-form" onSubmit={event => { event.preventDefault(); void submitAuth() }}>
+            <label htmlFor="auth-email">Email address</label>
+            <input id="auth-email" type="email" autoComplete="email" required maxLength={320} value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="you@example.com" />
+            <label htmlFor="auth-password">Password</label>
+            <input id="auth-password" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} required minLength={authMode === 'register' ? 12 : 1} maxLength={128} value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder={authMode === 'register' ? 'At least 12 characters' : 'Enter your password'} />
+            {authMode === 'register' && <p className="auth-hint">Use at least 12 characters for your password.</p>}
+            {authError && <div className="auth-error" role="alert">{authError}</div>}
+            <button className="auth-submit" type="submit" disabled={authLoading || !authEmail.trim() || !authPassword}>
+              {authLoading ? 'Please wait...' : authMode === 'login' ? 'Sign in securely' : 'Create account'}
+              {!authLoading && <ArrowRight size={17} />}
+            </button>
+          </form>
+          <div className="auth-footer"><ShieldCheck size={14} /> Your workspace is protected with encrypted authentication.</div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -441,8 +592,8 @@ function App() {
           </div>
           <div className="profile-row">
             <div className="avatar">PR</div>
-            <div className="profile-copy"><strong>Privora</strong><span>Personal workspace</span></div>
-            <Settings size={16} className="profile-settings" />
+            <div className="profile-copy"><strong>{currentUser.email}</strong><span>Personal workspace</span></div>
+            <button className="auth-logout" type="button" onClick={logout} title="Sign out" aria-label="Sign out"><LogOut size={16} /></button>
           </div>
         </div>
       </aside>
@@ -469,7 +620,7 @@ function App() {
               <span className={`status-dot ${apiOnline === false ? 'offline' : ''}`} />
               {apiOnline === null ? 'Check API status' : apiOnline ? 'API operational' : 'API unavailable'}
             </button>
-            <div className="top-avatar">DM</div>
+            <div className="top-avatar" title={currentUser.email}>PR</div>
           </div>
         </header>
 

@@ -2,83 +2,212 @@
 
 **Your data. Your privacy. Your control.**
 
-Privora is a privacy-focused text anonymization platform designed to detect and mask sensitive information before it is shared or processed elsewhere.
+Privora — платформа для обнаружения и анонимизации персональных и конфиденциальных данных в текстах. Проект построен на FastAPI и React, использует PostgreSQL для хранения задач, Redis для кеширования и RabbitMQ для асинхронной обработки.
 
-It combines a web interface, a REST API, synchronous anonymization, and background task processing in a Docker-based architecture.
+## Возможности
 
-## Features
+- Обнаружение и маскирование девяти категорий чувствительных данных.
+- Проверка форматов и контрольных сумм для отдельных типов данных.
+- Синхронная анонимизация через REST API.
+- Асинхронная обработка задач через RabbitMQ и отдельный worker.
+- Сохранение истории задач в PostgreSQL.
+- Кеширование результатов с помощью Redis.
+- Регистрация и аутентификация пользователей.
+- JWT-аутентификация с алгоритмом RS256.
+- Хеширование паролей с помощью Argon2.
+- Разделение истории задач по пользователям.
+- Просмотр результатов и экспорт в TXT, JSON и CSV.
+- Запуск компонентов приложения через Docker Compose.
 
-- Detection and masking of sensitive information in text.
-- Support for email addresses, phone numbers, names, addresses, dates, passport data, SNILS, Russian INN, and bank card numbers.
-- Rule-based detection using regular expressions and validation logic.
-- Synchronous text anonymization through a REST API.
-- Background anonymization through RabbitMQ and a dedicated Worker.
-- Persistent task and result storage in PostgreSQL.
-- Redis caching for synchronous anonymization.
-- Task history and task detail views in the web interface.
-- Export of anonymization results in TXT and JSON formats.
-- Task history export in CSV format.
-- Configurable detection categories.
-- Docker Compose-based local deployment.
+## Категории данных
 
-## Technology Stack
+| Категория | Описание |
+|---|---|
+| PERSON | Имена и персональные обозначения |
+| EMAIL | Адреса электронной почты |
+| PHONE | Номера телефонов |
+| BANK_CARD | Номера банковских карт с проверкой Luhn |
+| INN | ИНН с проверкой контрольных цифр |
+| PASSPORT | Паспортные данные |
+| SNILS | Номера СНИЛС |
+| ADDRESS | Адреса |
+| DATE | Даты |
 
-### Frontend
-- React
-- TypeScript
-- Vite
-- Nginx
-- CSS
+Для банковских карт сохраняются последние четыре цифры, для ИНН — последние две. Правила обнаружения и маскирования реализованы на стороне backend.
 
-### Backend
-- Python 3.12
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- Pytest
-- HTTPX
+## Технологический стек
 
-### Infrastructure
-- PostgreSQL 17
-- Redis
-- RabbitMQ
-- Pika
-- Docker
-- Docker Compose
+- **Frontend:** React, TypeScript, Vite, Nginx.
+- **Backend:** Python 3.12, FastAPI, Pydantic.
+- **ORM и миграции:** SQLAlchemy, Alembic.
+- **База данных:** PostgreSQL 17.
+- **Кеш:** Redis 7.
+- **Очередь сообщений:** RabbitMQ.
+- **Аутентификация:** JWT (RS256), Argon2.
+- **Тестирование:** Pytest, HTTPX.
+- **Контейнеризация:** Docker, Docker Compose.
 
-## Architecture
+## Архитектура
 
-```text
-                         User
-                           |
-                           v
-                    React Frontend
-                           |
-                           v
-                       FastAPI
-                           |
-              +------------+------------+
-              |                         |
-              v                         v
-       Synchronous API            Async Tasks API
-              |                         |
-              v                         v
-     Anonymization Engine           PostgreSQL
-              |                         |
-              v                         v
-         Redis Cache                 RabbitMQ
-                                        |
-                                        v
-                                      Worker
-                                        |
-                                        v
-                              Anonymization Engine
-                                        |
-                                        v
-                                    PostgreSQL
-                                        |
-                                        v
-                                  Task Result API
-                                        |
-                                        v
-                                  React Frontend
+Приложение состоит из следующих компонентов:
+
+1. React frontend — пользовательский интерфейс для ввода текста, просмотра результатов и управления задачами.
+2. FastAPI API — REST-интерфейс, аутентификация и синхронная обработка запросов.
+3. PostgreSQL — хранение пользователей и задач.
+4. Redis — кеширование результатов анонимизации.
+5. RabbitMQ — передача асинхронных задач.
+6. Worker — получение задач из очереди и выполнение анонимизации.
+
+Синхронные запросы обрабатываются API. Для фоновой обработки API сохраняет задачу в базе данных и отправляет сообщение в RabbitMQ. Worker получает сообщение, обрабатывает текст и сохраняет результат.
+
+## Требования
+
+Для запуска необходимы:
+
+- Docker.
+- Docker Compose.
+- OpenSSL для генерации ключей JWT.
+
+## Установка и запуск
+
+### 1. Получение проекта
+
+Клонируйте репозиторий и перейдите в его директорию:
+
+    git clone <URL-репозитория>
+    cd datamask
+
+### 2. Настройка окружения
+
+Создайте файл конфигурации:
+
+    cp .env.example .env
+
+Укажите собственные значения паролей PostgreSQL и RabbitMQ в `.env`. Не используйте демонстрационные значения в реальном развертывании.
+
+### 3. Генерация ключей JWT
+
+Создайте RSA-ключи:
+
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out private.pem
+    openssl pkey -in private.pem -pubout -out public.pem
+
+Получите Base64-представление ключей:
+
+    base64 < private.pem | tr -d '\n'
+    base64 < public.pem | tr -d '\n'
+
+Запишите полученные значения в переменные `JWT_PRIVATE_KEY_B64` и `JWT_PUBLIC_KEY_B64` файла `.env`.
+
+После настройки удалите временные файлы ключей:
+
+    rm private.pem public.pem
+
+Не публикуйте приватный ключ и файл `.env` в Git.
+
+### 4. Сборка и запуск
+
+Из корневой директории проекта выполните:
+
+    docker compose up -d --build
+
+### 5. Применение миграций базы данных
+
+    docker compose exec api alembic upgrade head
+
+### 6. Проверка контейнеров
+
+    docker compose ps
+
+## Доступ к приложению
+
+После запуска сервисы доступны локально:
+
+| Компонент | Адрес |
+|---|---|
+| Web-интерфейс | http://localhost:8080 |
+| API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| RabbitMQ Management | http://localhost:15672 |
+
+Для RabbitMQ используйте учетные данные, заданные в `.env`.
+
+## REST API
+
+Основные маршруты:
+
+| Метод | Endpoint | Назначение |
+|---|---|---|
+| GET | `/health` | Проверка состояния API |
+| POST | `/api/v1/anonymize` | Синхронная анонимизация |
+| POST | `/api/v1/auth/register` | Регистрация пользователя |
+| POST | `/api/v1/auth/login` | Вход пользователя |
+| GET | `/api/v1/auth/me` | Информация о текущем пользователе |
+| POST | `/api/v1/tasks` | Создание фоновой задачи |
+| GET | `/api/v1/tasks` | Получение истории задач |
+| GET | `/api/v1/tasks/{task_id}` | Получение результата задачи |
+| DELETE | `/api/v1/tasks/{task_id}` | Удаление задачи |
+
+Для защищенных маршрутов требуется JWT-токен в заголовке Authorization:
+
+    Authorization: Bearer <access_token>
+
+### Пример синхронного запроса
+
+    curl -X POST http://localhost:8000/api/v1/anonymize \
+      -H "Content-Type: application/json" \
+      -d '{"text":"Contact: user@example.com, phone: +1 202 555 0142"}'
+
+Ответ содержит анонимизированный текст, количество обнаружений по категориям и время обработки.
+
+## Тестирование
+
+Для запуска тестов внутри контейнера API:
+
+    docker compose exec api pytest -q
+
+Тесты проверяют API, правила анонимизации, обработку задач и механизмы аутентификации.
+
+## Полезные команды Docker
+
+Просмотр логов:
+
+    docker compose logs -f
+
+Логи API:
+
+    docker compose logs -f api
+
+Логи worker:
+
+    docker compose logs -f worker
+
+Остановка сервисов:
+
+    docker compose down
+
+Остановка с удалением томов:
+
+    docker compose down -v
+
+Внимание: команда `docker compose down -v` удаляет тома и сохраненные в них данные, включая данные PostgreSQL.
+
+## Безопасность и ограничения
+
+- Пароли пользователей хранятся в виде Argon2-хешей.
+- Для JWT используется RS256.
+- Доступ к истории и отдельным задачам ограничен владельцем задачи.
+- Исходный текст не возвращается в списке истории и в ответе с деталями задачи.
+- Файл `.env` и приватные ключи не должны попадать в публичный репозиторий.
+
+**Важно:** для асинхронной обработки исходный текст задачи сохраняется в PostgreSQL. В текущей версии автоматическая политика удаления исходных текстов и сроков хранения не реализована. Перед использованием реальных персональных данных необходимо учитывать это ограничение.
+
+В текущей версии также не реализованы подтверждение электронной почты, восстановление пароля и многофакторная аутентификация.
+
+## Статус проекта
+
+Privora — учебный проект, демонстрирующий построение приложения для анонимизации текста с REST API, фоновой обработкой, базой данных, кешированием, аутентификацией и веб-интерфейсом.
+
+**Название проекта:** Privora
+**Слоган:** Your data. Your privacy. Your control.

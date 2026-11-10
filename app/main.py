@@ -6,20 +6,23 @@ import uuid
 from time import perf_counter
 
 import redis
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 
 from app.schemas import AnonymizeRequest, AnonymizeResponse
 from app.anonymizer.engine import AnonymizationEngine
 from app.queue.rabbitmq import publish_task
 from app.database import SessionLocal
 from app.models import Task
+from app.auth import get_current_user_id, router as auth_router
 
 
 app = FastAPI(
-    title="DataMask API",
+    title="Privora API",
     description="Service for detecting and masking sensitive information in text.",
     version="0.1.0",
 )
+
+app.include_router(auth_router)
 
 engine = AnonymizationEngine()
 
@@ -36,7 +39,7 @@ TASK_RESULT_TTL = 3600
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "datamask"}
+    return {"status": "ok", "service": "privora"}
 
 
 @app.post("/api/v1/anonymize", response_model=AnonymizeResponse)
@@ -58,7 +61,7 @@ def anonymize(payload: AnonymizeRequest):
         sort_keys=True,
     )
 
-    cache_key = "datamask:" + hashlib.sha256(
+    cache_key = "privora:" + hashlib.sha256(
         cache_data.encode("utf-8")
     ).hexdigest()
 
@@ -112,7 +115,7 @@ def anonymize(payload: AnonymizeRequest):
 
 
 @app.post("/api/v1/tasks")
-def create_task(payload: AnonymizeRequest):
+def create_task(payload: AnonymizeRequest, user_id: str = Depends(get_current_user_id)):
     task_id = str(uuid.uuid4())
 
     task_data = {
@@ -128,6 +131,7 @@ def create_task(payload: AnonymizeRequest):
             id=task_id,
             status="pending",
             original_text=payload.text,
+            user_id=user_id,
         )
 
         db.add(db_task)
@@ -147,7 +151,7 @@ def create_task(payload: AnonymizeRequest):
     # Redis — необязательный кэш
     try:
         redis_client.setex(
-            f"datamask:task:{task_id}",
+            f"privora:task:{task_id}",
             TASK_RESULT_TTL,
             json.dumps(task_data, ensure_ascii=False),
         )
@@ -162,7 +166,7 @@ def create_task(payload: AnonymizeRequest):
         db = SessionLocal()
 
         try:
-            failed_task = db.get(Task, task_id)
+            failed_task = db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first()
 
             if failed_task:
                 failed_task.status = "failed"
@@ -187,6 +191,7 @@ def create_task(payload: AnonymizeRequest):
 def list_tasks(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Return recent tasks without exposing original text."""
     db = SessionLocal()
@@ -194,6 +199,7 @@ def list_tasks(
     try:
         tasks = (
             db.query(Task)
+            .filter(Task.user_id == user_id)
             .order_by(Task.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -219,12 +225,12 @@ def list_tasks(
 
 
 @app.get("/api/v1/tasks/{task_id}")
-def get_task(task_id: str):
+def get_task(task_id: str, user_id: str = Depends(get_current_user_id)):
     # PostgreSQL — основной источник данных о задаче
     db = SessionLocal()
 
     try:
-        task = db.get(Task, task_id)
+        task = db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first()
 
         if task is None:
             raise HTTPException(
@@ -250,12 +256,19 @@ def get_task(task_id: str):
 
 
 @app.delete("/api/v1/tasks/{task_id}")
-def delete_task(task_id: str):
+def delete_task(task_id: str, user_id: str = Depends(get_current_user_id)):
     """Delete a completed or failed task."""
     db = SessionLocal()
 
     try:
-        task = db.get(Task, task_id)
+        task = (
+            db.query(Task)
+            .filter(
+                Task.id == task_id,
+                Task.user_id == user_id,
+            )
+            .first()
+        )
 
         if task is None:
             raise HTTPException(
